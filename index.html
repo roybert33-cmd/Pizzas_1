@@ -1,27 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
-<head><style>
-@font-face {
-  font-family: "Optimistic";
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Optimistic Mono";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
-}
-:where(html) {
-  font-family: "Optimistic", system-ui, sans-serif;
-}
-:where(code, pre, kbd, samp) {
-  font-family: "Optimistic Mono", ui-monospace, monospace;
-}
-</style>
+<head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cocina - Pizzas 1</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -34,6 +13,8 @@
   .wrap{padding:14px;max-width:1100px;margin:auto}
   .stats{display:flex;gap:10px;margin-bottom:14px} .stat{flex:1;background:white;border-radius:14px;padding:12px 14px;box-shadow:0 2px 10px #0001}
   .stat b{font-size:28px;display:block;font-family:'Fredoka'} .stat span{font-size:11px;color:#666;letter-spacing:.8px}
+  .panel-control{background:white;padding:16px;border-radius:16px;margin-bottom:16px;box-shadow:0 4px 16px #0001;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .panel-control input{padding:12px;border:2px solid #cbd5e1;border-radius:10px;font-size:18px;font-family:'Fredoka';width:140px;text-align:center}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
   .card{background:white;border-radius:18px;padding:16px;box-shadow:0 4px 16px #0001;border-left:7px solid var(--azul);animation:pop .25s;transition:.3s}
   @keyframes pop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
@@ -41,58 +22,134 @@
   @keyframes alerta{from{box-shadow:0 4px 16px #0001}to{box-shadow:0 8px 24px #16a34a44}}
   .card h2{margin:0;font-family:'Fredoka';font-size:36px;color:var(--azul)}
   .btn{width:100%;padding:14px;border:none;border-radius:12px;font-weight:800;font-size:16px;margin-top:12px}
+  .btn-crear{background:var(--azul);color:white;width:auto;padding:12px 20px;margin-top:0}
   .btn-avisar{background:var(--amarillo);color:var(--azul)} .btn-listo{background:#16a34a;color:white}
   .vacio{text-align:center;padding:60px 20px;color:#888}
 </style>
 </head>
 <body>
-<header><h1>🍕 Cocina Pizzas 1 - Con AppCheck Debug</h1><button onclick="reiniciarTodo()" style="background:white;color:var(--azul);border:none;padding:10px 16px;border-radius:10px;font-weight:800">♻️ Reiniciar día</button></header>
+<header>
+  <h1>🍕 Cocina Pizzas 1</h1>
+  <button onclick="reiniciarTodo()" style="background:white;color:var(--azul);border:none;padding:10px 16px;border-radius:10px;font-weight:800">♻️ Reiniciar día</button>
+</header>
 <div class="wrap">
-  <div class="stats"><div class="stat"><b id="c-espera">0</b><span>EN ESPERA</span></div><div class="stat"><b id="c-listo">0</b><span>AVISADOS</span></div><div class="stat"><b id="c-hora">--:--</b><span>HORA</span></div><div class="stat"><b id="c-total">0</b><span>TOTAL HOY</span></div></div>
-  <div id="lista" class="grid"></div><div id="vacio" class="vacio">🎉<br>Sin pedidos<br><small>Clientes deben escanear QR del acrílico</small></div>
+  <div class="panel-control">
+    <span style="font-weight:700;color:var(--azul)">Crear Turno Manual:</span>
+    <input type="number" id="nuevo-turno-id" placeholder="N° Turno">
+    <button class="btn btn-crear" onclick="crearTurnoCocina()">➕ Agregar a Cocina</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="c-espera">0</b><span>EN ESPERA</span></div>
+    <div class="stat"><b id="c-listo">0</b><span>AVISADOS</span></div>
+    <div class="stat"><b id="c-hora">--:--</b><span>HORA</span></div>
+    <div class="stat"><b id="c-total">0</b><span>TOTAL HOY</span></div>
+  </div>
+
+  <div id="lista" class="grid"></div>
+  <div id="vacio" class="vacio">🎉<br>Sin pedidos activos<br><small>Crea un turno arriba cuando el cliente pague en caja</small></div>
 </div>
+
 <audio id="beep" preload="auto" src="https://cdn.pixabay.com/audio/2022/03/15/audio_58b8d6a5a8.mp3"></audio>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, onValue, update, set, get, remove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app-check.js";
+
 const firebaseConfig = { apiKey: "AIzaSyB9kLWRc6t7_XNBhlC10a4jmtbCntxOEYo", authDomain: "avisador-arayapp.firebaseapp.com", databaseURL: "https://avisador-arayapp-default-rtdb.firebaseio.com", projectId: "avisador-arayapp", storageBucket: "avisador-arayapp.firebasestorage.app", messagingSenderId: "337997002279", appId: "1:337997002279:web:6dc307a6e474432e64c002" };
 const app = initializeApp(firebaseConfig);
 const appCheck = initializeAppCheck(app, { provider: new ReCaptchaV3Provider('6LcPPFEtAAAAAIVtKgVFo1jtAQWRESDHHnCjMKaE'), isTokenAutoRefreshEnabled: true });
-const db=getDatabase(app);const auth=getAuth(app);const RUTA_BASE='pizzas_1';
-const listaEl=document.getElementById("lista");const vacioEl=document.getElementById("vacio");const beep=document.getElementById("beep");
-function hora(ts){return new Date(ts).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}
+const db = getDatabase(app); const auth = getAuth(app); const RUTA_BASE = 'pizzas_1';
+const listaEl = document.getElementById("lista"); const vacioEl = document.getElementById("vacio"); const beep = document.getElementById("beep");
+
+function hora(ts){ return new Date(ts).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}); }
+
 signInAnonymously(auth).then(()=>{
-  setInterval(()=>{document.getElementById("c-hora").innerText=new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})},1000);
-  onValue(ref(db,`${RUTA_BASE}/pedidos`), (snap)=>{
-    listaEl.innerHTML="";let espera=0,listo=0,total=0;let pedidos=[];
-    snap.forEach(c=>{
+  setInterval(()=>{ document.getElementById("c-hora").innerText = new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}); }, 1000);
+  
+  onValue(ref(db, `${RUTA_BASE}/pedidos`), (snap)=>{
+    listaEl.innerHTML = ""; let espera = 0, listo = 0, total = 0; let pedidos = [];
+    
+    snap.forEach(c => {
       const val = c.val();
-      if(val) {
-        pedidos.push({id: c.key, ...val});
-      }
+      if(val) pedidos.push({ id: c.key, ...val });
     }); 
-    pedidos.sort((a,b)=>{
-      const idA = Number(a.id) || 0;
-      const idB = Number(b.id) || 0;
-      return idA - idB;
-    });
-    const visibles=pedidos.filter(p=>p.estado!=="ENTREGADO"); total=pedidos.length;
-    vacioEl.style.display=visibles.length===0?"block":"none";
-    visibles.forEach(p=>{
-      if(p.estado==="ESPERA") espera++; if(p.estado==="LISTO") listo++;
-      const div=document.createElement("div");div.className="card"+(p.estado==="LISTO"?" listo":"");
-      const tiempoAvisado=p.timestamp_listo?Math.floor((Date.now()-p.timestamp_listo)/1000):0;
-      div.innerHTML=`<div><small style="color:#888">TURNO</small><h2>#${p.id}</h2><small>${p.estado}${p.estado==="LISTO"?` hace ${tiempoAvisado}s`:""}</small><div style="font-size:12px;color:#888;margin-top:6px">🕒 ${hora(p.timestamp)}</div></div>${p.estado==="ESPERA"?`<button class="btn btn-avisar" onclick="avisar('${p.id}')">🔔 AVISAR</button>`:`<button class="btn btn-listo">✅ Avisado - ${Math.max(0,25-tiempoAvisado)}s</button>`}`;
+
+    pedidos.sort((a,b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+    
+    const visibles = pedidos.filter(p => p.estado !== "ENTREGADO"); 
+    total = pedidos.length;
+    vacioEl.style.display = visibles.length === 0 ? "block" : "none";
+    
+    visibles.forEach(p => {
+      if(p.estado === "ESPERA") espera++; 
+      if(p.estado === "LISTO") listo++;
+      
+      const div = document.createElement("div");
+      div.className = "card" + (p.estado === "LISTO" ? " listo" : "");
+      const tiempoAvisado = p.timestamp_listo ? Math.floor((Date.now() - p.timestamp_listo) / 1000) : 0;
+      
+      div.innerHTML = `<div>
+        <small style="color:#888">TURNO</small>
+        <h2>#${p.id}</h2>
+        <small>${p.estado}${p.estado==="LISTO"?` hace ${tiempoAvisado}s`:""}</small>
+        <div style="font-size:12px;color:#888;margin-top:6px">🕒 ${hora(p.timestamp)}</div>
+      </div>
+      ${p.estado==="ESPERA"?`<button class="btn btn-avisar" onclick="avisar('${p.id}')">🔔 AVISAR</button>`:`<button class="btn btn-listo">✅ Avisado - ${Math.max(0,25-tiempoAvisado)}s</button>`}`;
       listaEl.appendChild(div);
     });
-    document.getElementById("c-espera").innerText=espera;document.getElementById("c-listo").innerText=listo;document.getElementById("c-total").innerText=total;
-    const ultimo=visibles[visibles.length-1]; if(ultimo&&ultimo.estado==="ESPERA"&&Date.now()-ultimo.timestamp<6000){beep.play().catch(()=>{})}
+    
+    document.getElementById("c-espera").innerText = espera;
+    document.getElementById("c-listo").innerText = listo;
+    document.getElementById("c-total").innerText = total;
+    
+    const ultimo = visibles[visibles.length - 1]; 
+    if(ultimo && ultimo.estado === "ESPERA" && Date.now() - ultimo.timestamp < 6000){
+      beep.play().catch(()=>{});
+    }
   });
 });
-window.avisar=async(id)=>{ await update(ref(db,`${RUTA_BASE}/pedidos/${id}`),{estado:"LISTO",timestamp_listo:Date.now()}); setTimeout(async()=>{ try{ await update(ref(db,`${RUTA_BASE}/pedidos/${id}`),{estado:"ENTREGADO"}); setTimeout(async()=>{ try{await remove(ref(db,`${RUTA_BASE}/pedidos/${id}`))}catch(e){} },5000); }catch(e){} },25000); };
-window.reiniciarTodo=async()=>{ if(!confirm("¿Borrar TODOS los pedidos de pizzas_1?")) return; const snap=await get(ref(db,`${RUTA_BASE}/pedidos`)); if(snap.exists()){ const promesas=[];snap.forEach(c=>{promesas.push(remove(ref(db,`${RUTA_BASE}/pedidos/${c.key}`)))}); await Promise.all(promesas); } await set(ref(db,`${RUTA_BASE}/contador`),0); alert("Día reiniciado"); };
+
+window.crearTurnoCocina = async () => {
+  const inputVal = document.getElementById("nuevo-turno-id").value.trim();
+  if(!inputVal || isNaN(inputVal)){
+    alert("Ingresa un número de turno válido para crearlo.");
+    return;
+  }
+  const idTurno = Number(inputVal);
+  try {
+    await set(ref(db, `${RUTA_BASE}/pedidos/${idTurno}`), {
+      estado: "ESPERA",
+      timestamp: Date.now()
+    });
+    document.getElementById("nuevo-turno-id").value = "";
+  } catch(err) {
+    alert("Error al crear turno: " + err.message);
+  }
+};
+
+window.avisar = async (id) => {
+  await update(ref(db, `${RUTA_BASE}/pedidos/${id}`), { estado: "LISTO", timestamp_listo: Date.now() });
+  setTimeout(async () => {
+    try {
+      await update(ref(db, `${RUTA_BASE}/pedidos/${id}`), { estado: "ENTREGADO" });
+      setTimeout(async () => { try { await remove(ref(db, `${RUTA_BASE}/pedidos/${id}`)); } catch(e){} }, 5000);
+    } catch(e){}
+  }, 25000);
+};
+
+window.reiniciarTodo = async () => {
+  if(!confirm("¿Borrar TODOS los pedidos de pizzas_1?")) return;
+  const snap = await get(ref(db, `${RUTA_BASE}/pedidos`));
+  if(snap.exists()){
+    const promesas = [];
+    snap.forEach(c => { promesas.push(remove(ref(db, `${RUTA_BASE}/pedidos/${c.key}`))); });
+    await Promise.all(promesas);
+  }
+  alert("Día reiniciado");
+};
 </script>
-<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body>
+</body>
 </html>
