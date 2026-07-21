@@ -67,7 +67,17 @@ signInAnonymously(auth).then(()=>{
   setInterval(()=>{document.getElementById("c-hora").innerText=new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})},1000);
   onValue(ref(db,`${RUTA_BASE}/pedidos`), (snap)=>{
     listaEl.innerHTML="";let espera=0,listo=0,total=0;let pedidos=[];
-    snap.forEach(c=>{pedidos.push({id:c.key,...c.val()})}); pedidos.sort((a,b)=>(parseInt(a.id)-parseInt(b.id)));
+    snap.forEach(c=>{
+      const val = c.val();
+      if(val) {
+        pedidos.push({id: c.key, ...val});
+      }
+    }); 
+    pedidos.sort((a,b)=>{
+      const idA = Number(a.id) || 0;
+      const idB = Number(b.id) || 0;
+      return idA - idB;
+    });
     const visibles=pedidos.filter(p=>p.estado!=="ENTREGADO"); total=pedidos.length;
     vacioEl.style.display=visibles.length===0?"block":"none";
     visibles.forEach(p=>{
